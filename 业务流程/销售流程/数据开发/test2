@@ -1,0 +1,1 @@
+select name,count(1) from test_db.test_1 group by name order by name limit 10
