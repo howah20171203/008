@@ -1,0 +1,78 @@
+select
+t2.sdt as "数据日期"
+,t1.dim_shop_id as "门店ID"
+,t1.shop_name as "门店名称"
+,count(t2.order_id) as "订单量"
+,sum(t2.sale_amt) as "销售额"
+,count(distinct t3.dim_member_id) as "新用户数"
+,count(distinct case when t4.promotion_code in ('xihongshi1104','3yuanxianjinquan1104','39-5manjianquan1104') then t2.dim_member_id end) as "使用新人券的人数"
+,sum(case when t4.promotion_code in ('xihongshi1104','3yuanxianjinquan1104','39-5manjianquan1104') then t2.sale_amt else 0 end) as "使用新人券的销售额"
+,count(distinct case when t4.promotion_code in ('baisuishan1104','shengxiaren1104','xingfalvniaoji1104') then t2.dim_member_id end) as "使用会员券的人数"
+,sum(case when t4.promotion_code in ('baisuishan1104','shengxiaren1104','xingfalvniaoji1104') then t2.sale_amt else 0 end)  as "使用会员券的销售额"
+,count(distinct case when t4.promotion_code ='xihongshi1104' then t2.order_id end) as "【西红柿0.01元】订单量"
+,sum(case when t4.promotion_code ='xihongshi1104' then t2.sale_amt else 0 end) as "【西红柿0.01元】销售额"
+,count(distinct case when t4.promotion_code ='3yuanxianjinquan1104' then t2.order_id end) as "【满3元券】订单量"
+,sum(case when t4.promotion_code ='3yuanxianjinquan1104' then t2.sale_amt else 0 end) as "【满3元券】销售额"
+,count(distinct case when t4.promotion_code ='39-5manjianquan1104' then t2.order_id end) as "【满39-5券】订单量"
+,sum(case when t4.promotion_code ='39-5manjianquan1104' then t2.sale_amt else 0 end) as "【满39-5券】销售额"
+,count(distinct case when t4.promotion_code ='baisuishan1104' then t2.order_id end) as "【百岁山1元购】订单量"
+,sum(case when t4.promotion_code ='baisuishan1104' then t2.sale_amt else 0 end) as "【百岁山1元购】销售额"
+,count(distinct case when t4.promotion_code='shengxiaren1104' then t2.order_id end)  as "【虾仁】订单量"
+,sum(case when t4.promotion_code='shengxiaren1104' then t2.sale_amt else 0 end) as "【虾仁】销售额"
+,count(distinct case when t4.promotion_code ='xingfalvniaoji1104' then t2.order_id end) as  "【乌鸡】订单量"
+,sum(case when t4.promotion_code ='xingfalvniaoji1104' then t2.sale_amt else 0 end) as "【乌鸡】销售额"
+,t2.sdt
+from dim.dim_shop t1
+left join
+(select
+a.sdt
+,a.shop_id
+,a.promotion_code
+,a.dim_member_id
+,a.order_id
+,sum(a.qty) as qty
+,sum(a.sale_amt) as sale_amt
+from dw.dwb_fct_order_detail a
+join dim.dim_shop b
+on a.shop_id=b.dim_shop_id
+where a.sdt = '20191030'
+and a.dim_orderstatus_id='2'
+and b.city_name='上海市'
+and b.seller_type_id='0'
+and b.shop_name in ('俱进路店','利津路店','迎春路店','平型关路店','打虎山路店','天镇路店','七宝店','新华路店','上中西路店','秋竹路店','武威东路店','锦秋路店')
+group by
+a.sdt
+,a.shop_id
+,a.promotion_code
+,a.dim_member_id
+,a.order_id
+)
+t2
+on t1.dim_shop_id=t2.shop_id
+left join
+(select
+cast(dim_member_id as varchar) as dim_member_id
+,order_id
+,pay_at
+from
+(select t1.customer_id as dim_member_id
+,t1.id order_id
+,t1.pay_at
+,row_number() over (partition by t1.customer_id order by t1.pay_at asc) rn
+from dwd.dwd_order_db__t_trade_order_header t1
+left join dim.dim_shop t2
+ on t1.shop_id=t2.dim_shop_id
+where t1.order_status = 'os.completed'
+and t2.city_name='上海市'
+and t2.seller_type_id='0'
+and t2.status='1'
+)
+where rn=1) t3
+on t2.dim_member_id=t3.dim_member_id
+and t2.sdt=replace(substr(t3.pay_at,1,10),'-','')
+left join (select order_id,max(promotion_code) as promotion_code from dw.dwb_fct_promotion_coupon_order where sdt='20191030' group by order_id) t4
+on t2.order_id=t4.order_id
+where t1.shop_name in ('俱进路店','利津路店','迎春路店','平型关路店','打虎山路店','天镇路店','七宝店','新华路店','上中西路店','秋竹路店','武威东路店','锦秋路店')
+group by t2.sdt
+,t1.dim_shop_id
+,t1.shop_name
